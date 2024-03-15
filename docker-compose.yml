@@ -1,40 +1,54 @@
 version: "3.8"
 
 services:
-  php-apache:
-    build: ./services/php-apache
+
+  nginx:
+    build: ./services/nginx
+    volumes:
+      - ./source:/var/www/html
+      - ./services/nginx/logs:/var/log/nginx
+      - ./services/nginx/conf.d/:/etc/nginx/conf.d/
     ports:
       - "80:80"
-    volumes:
-        - ./source:/var/www/html
-        - ./services/php-apache/php.ini:/usr/local/etc/php/php.ini
-        - ./services/php-apache/apache.conf:/etc/apache2/sites-available/000-default.conf
-        - ./services/php-apache/logs/error.log:/var/log/apache2/error.log
     depends_on:
-        - mysql
+      - php
+
+  php:
+    build: ./services/php
+    volumes:
+      - ./source:/var/www/html
+      - ./services/php/php.ini:/usr/local/etc/php/php.ini
+      - ./services/php/logs/php_errors.log:/var/log/php_errors.log
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   mysql:
     image: mysql:5.7
-    ports:
-      - "3306:3306"
-    volumes:
-      - ./services/mysql/data:/var/lib/mysql
-      - ./services/mysql/config:/etc/mysql/conf.d
-      - ./services/mysql/logs:/var/log/mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: "%"
       MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - 3306:3306
+    volumes:
+      - ./services/mysql/config/my.cnf:/etc/mysql/my.cnf
+      - ./services/mysql/data:/var/lib/mysql
+      - ./services/mysql/logs:/var/log/mysql
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+      interval: 5s
+      retries: 10
+
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     ports:
-      - "8081:80"
+      - 8081:80
     environment:
       PMA_HOST: mysql
       PMA_USER: ${PMA_USER}
       PMA_PASSWORD: ${PMA_PASSWORD}
     depends_on:
       - mysql
-      - php-apache
+      - php
